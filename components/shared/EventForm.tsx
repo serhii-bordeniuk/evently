@@ -1,7 +1,8 @@
 "use client";
-
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useState } from "react";
+import { useUploadThing } from "@/lib/uplaodthing";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,12 +21,14 @@ import * as z from "zod";
 import { eventDefaultValues } from "@/constants";
 import Dropdown from "./Dropdown";
 import { FileUploader } from "./FileUploader";
-import { useState } from "react";
+
 import Image from "next/image";
 import DatePicker from "react-datepicker";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import "react-datepicker/dist/react-datepicker.css";
+import { useRouter } from "next/navigation";
+import { createEvent } from "@/lib/actions/event.actions";
 
 type EventFormProps = {
     userId: string;
@@ -35,6 +38,9 @@ type EventFormProps = {
 const EventForm = ({ userId, type }: EventFormProps) => {
     const [files, setFiles] = useState<File[]>([]);
     const initialValues = eventDefaultValues;
+    const router = useRouter()
+
+    const { startUpload } = useUploadThing("imageUploader");
 
     // 1. Define your form.
     const form = useForm<z.infer<typeof eventFormSchema>>({
@@ -43,10 +49,35 @@ const EventForm = ({ userId, type }: EventFormProps) => {
     });
 
     // 2. Define a submit handler.
-    function onSubmit(values: z.infer<typeof eventFormSchema>) {
-        // Do something with the form values.
-        // ✅ This will be type-safe and validated.
-        console.log(values);
+    async function onSubmit(values: z.infer<typeof eventFormSchema>) {
+        let uplaodedImageUrl = values.imageUrl;
+
+        if (files.length > 0) {
+            const uploadedImages = await startUpload(files);
+
+            if (!uploadedImages) {
+                return;
+            }
+
+            uplaodedImageUrl = uploadedImages[0].url;
+        }
+
+        if (type === "Create") {
+            try {
+                const newEvent = await createEvent({
+                    event: { ...values, imageUrl: uplaodedImageUrl },
+                    userId,
+                    path: "/profile",
+                });
+
+                if (newEvent) {
+                    form.reset()
+                    router.push(`/events/${newEvent._id}`)
+                }
+            } catch (error) {
+                console.log(error);
+            }
+        }
     }
 
     return (
@@ -249,6 +280,8 @@ const EventForm = ({ userId, type }: EventFormProps) => {
                                                                 Free Ticket
                                                             </label>
                                                             <Checkbox
+                                                                onCheckedChange={field.onChange}
+                                                                checked={field.value}
                                                                 id="isFree"
                                                                 className="mr-2 h-5 w-5 border-2 border-primary-500"
                                                             />
